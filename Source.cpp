@@ -65,22 +65,20 @@ public:
 		bitmapHeader = 14;
 	}
 
-	// quick and dirty bitmap loader...for 24 bit bitmaps with 1 plane only.  
-	// See http://www.dcs.ed.ac.uk/~mxr/gfx/2d/BMP.txt for more info.
 	int imageLoad(char *filename, Image *image) {
 		FILE *file;
-		unsigned int i;                    // standard counter.
-		unsigned short int planes;          // number of planes in image (must be 1) 
+		unsigned int i;                    
+		unsigned short int planes;          // количество слоёв(должно быть 1)
 
 
-		// make sure the file is there.
+		// проверяем загрузился ли файл
 		if ((file = fopen(filename, "rb")) == NULL)
 		{
 			printf("File Not Found : %s\n", filename);
 			return 1;
 		}
 
-		// seek through the bmp header, up to the width/height:
+		
 		fseek(file, bitmapHeader - sizeof(pixelDataOffset), SEEK_CUR);
 
 		if ((i = fread(&pixelDataOffset, 4, 1, file)) != 1) {
@@ -93,72 +91,73 @@ public:
 			return 1;
 		}
 
-		// read the width
+		// считываем ширину
 		if ((i = fread(&image->sizeX, 4, 1, file)) != 1) {
 			printf("Error reading width from %s.\n", filename);
 			return 1;
 		}
 
-		// read the height 
+		// считываем высоту
 		if ((i = fread(&height, 4, 1, file)) != 1) {
 			printf("Error reading height from %s.\n", filename);
 			return 1;
 		}
 		image->sizeY = abs(height);
 
-		// read the planes
+		// считываем кол-во слоёв
 		if ((fread(&planes, 2, 1, file)) != 1) {
 			printf("Error reading planes from %s.\n", filename);
 			return 1;
 		}
 
-		// read the bpp
+		// считываем кол-во битов
 		if ((i = fread(&bpp, 2, 1, file)) != 1) {
 			printf("Error reading bpp from %s.\n", filename);
 			return 1;
 		}
 
-		// read the compression
+		// считываем сжатие
 		if ((i = fread(&compression, 4, 1, file)) != 1) {
 			printf("Error reading compression from %s.\n", filename);
 			return 1;
 		}
 
+		// считываем размер изображения
 		if ((i = fread(&sizeImage, 4, 1, file)) != 1) {
 			printf("Error reading sizeImage from %s.\n", filename);
 			return 1;
 		}
 
-		// seek past the rest of the bitmap header.
+		
 		fseek(file, pixelDataOffset, SEEK_SET);
 
-		// read the data. 
+		// выделяем место для считывания данных
 		image->data = (unsigned char *)malloc(sizeof(unsigned char)*sizeImage);
 		if (image->data == NULL) {
 			printf("Error allocating memory for color-corrected image data\n");
 			return 1;
 		}
 
+		// считываем данные
 		if ((i = fread(image->data, sizeImage, 1, file)) != 1) {
 			printf("Error reading image data from %s.\n", filename);
 			return 1;
 		}
 
+		// переворачиваем цвет из bgr в rgb
 		unsigned char temp;
 		for (i = 0; i < sizeImage; i += bpp / 8) {
-			// reverse all of the colors. (bgr -> rgb)
 			temp = image->data[i];
 			image->data[i] = image->data[i + 2];
 			image->data[i + 2] = temp;
 		}
 
-		//reverse string order
+		// переворачиваем оси
 		for (int i = 0; i < image->sizeY / 2; i++) {
 			for (int j = 0; j < image->sizeX; j++) {
 				for (int z = 0; z < bpp / 8; z++) {
 					temp = image->data[i * image->sizeX * bpp / 8 + j*bpp / 8 + z];
-					image->data[i * image->sizeX * bpp / 8 + j*bpp / 8 + z] =
-						image->data[(image->sizeY - 2 - i) * image->sizeX * bpp / 8 + j*bpp / 8 + z];
+					image->data[i * image->sizeX * bpp / 8 + j*bpp / 8 + z] = image->data[(image->sizeY - 2 - i) * image->sizeX * bpp / 8 + j*bpp / 8 + z];
 					image->data[(image->sizeY - 2 - i) * image->sizeX * bpp / 8 + j*bpp / 8 + z] = temp;
 				}
 			}
@@ -168,12 +167,10 @@ public:
 		return 0;
 	}
 
-	// Load Bitmaps And Convert To Textures
 	void loadGLTextures() {
-		// Load Texture
 		Image *image1;
 
-		// allocate space for texture
+		// выделяем место под текстуру
 		image1 = (Image *)malloc(sizeof(Image));
 		if (image1 == NULL) {
 			printf("Error allocating space for image");
@@ -184,47 +181,45 @@ public:
 		}
 
 		glEnable(GL_TEXTURE_RECTANGLE_NV);
-		// Create Texture   
+		// создаём текстуру  
 		glGenTextures(1, &texture[0]);
-		glBindTexture(GL_TEXTURE_RECTANGLE_NV, texture[0]);   // 2d texture (x and y size)
+		glBindTexture(GL_TEXTURE_RECTANGLE_NV, texture[0]);   // 2д текстура
 
 		glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MAG_FILTER, GL_NEAREST); // scale linearly when image bigger than texture
 		glTexParameteri(GL_TEXTURE_RECTANGLE_NV, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // scale linearly when image smalled than texture
 
-		// 2d texture, level of detail 0 (normal), 3 components (red, green, blue), x size from image, y size from image, 
-		// border 0 (normal), rgb color data, unsigned byte data, and finally the data itself.
 		glTexImage2D(GL_TEXTURE_RECTANGLE_NV, 0, bpp / 8, image1->sizeX, image1->sizeY, 0, GL_RGBA, GL_UNSIGNED_BYTE, image1->data);
 		glDisable(GL_TEXTURE_RECTANGLE_NV);
 	}
 
-	/* The main drawing function. */
+	// главная функция отрисовки
 	void square(int x1, int y1, int x2, int y2, int* startXY, int size)
 	{
 		glEnable(GL_TEXTURE_RECTANGLE_NV);
 		glEnable(GL_ALPHA);
 		glEnable(GL_BLEND);
-		//white background
+		//белый "фон"
 		glColor3f(1.0f, 1.0f, 1.0f);
-		glBindTexture(GL_TEXTURE_RECTANGLE_NV, texture[0]);   // choose the texture to use.
+		glBindTexture(GL_TEXTURE_RECTANGLE_NV, texture[0]);   // выбираем текстуру, которую будем использовать
 
 		
-		glBegin(GL_QUADS);                      // begin drawing a cube
+		glBegin(GL_QUADS);                      // выбираем отрисовку квадрата
 
-												//top left
+		//верхний левый
 		glTexCoord2i(startXY[0], startXY[1]);
-		glVertex2f(x1, y1);  // Bottom Left Of The Texture and Quad
-							 //top right
+		glVertex2f(x1, y1);  
+		//верхний правый
 		glTexCoord2i(startXY[0] + size, startXY[1]);
-		glVertex2f(x2, y1);  // Bottom Right Of The Texture and Quad
-							 //bottom right
+		glVertex2f(x2, y1);  
+		// нижний правый
 		glTexCoord2i(startXY[0] + size, startXY[1] + size);
-		glVertex2f(x2, y2);  // Top Right Of The Texture and Quad
-							 //bottom left
+		glVertex2f(x2, y2);  
+		// нижний левый
 		glTexCoord2i(startXY[0], startXY[1] + size);
-		glVertex2f(x1, y2);  // Top Left Of The Texture and Quad
+		glVertex2f(x1, y2);  
 
 
-		glEnd();                                    // done with the polygon.
+		glEnd();                                    // завершаем отрисовку
 		glDisable(GL_BLEND);
 		glDisable(GL_ALPHA);
 		glDisable(GL_TEXTURE_RECTANGLE_NV);
